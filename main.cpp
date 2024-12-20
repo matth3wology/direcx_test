@@ -3,7 +3,22 @@
 #endif
 
 #include <d3d11.h>
+#include <stdlib.h>
+#include <time.h>
 #include <windows.h>
+
+// Function to generate a random float between 0.00 and 1.00
+float generateRandomFloat() {
+  // Seed the random number generator
+  static int seeded = 0;
+  if (!seeded) {
+    srand(time(NULL));
+    seeded = 1;
+  }
+
+  // Generate a random float between 0.00 and 1.00
+  return (float)rand() / (float)RAND_MAX;
+}
 
 LRESULT CALLBACK ProgramHandler(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 
@@ -14,6 +29,11 @@ HRESULT InitializeD3D(HWND hwnd, ID3D11Device **ppDevice,
 
 void Render(ID3D11DeviceContext *pDeviceContext, IDXGISwapChain *pSwapChain,
             ID3D11RenderTargetView *pRenderTargetView);
+
+ID3D11Device *pDevice = nullptr;
+ID3D11DeviceContext *pDeviceContext = nullptr;
+IDXGISwapChain *pSwapChain = nullptr;
+ID3D11RenderTargetView *pRenderTargetView = nullptr;
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                     PWSTR pCmdLine, int nCmdShow) {
@@ -49,11 +69,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
   ShowWindow(hwnd, nCmdShow);
 
-  ID3D11Device *pDevice = nullptr;
-  ID3D11DeviceContext *pDeviceContext = nullptr;
-  IDXGISwapChain *pSwapChain = nullptr;
-  ID3D11RenderTargetView *pRenderTargetView = nullptr;
-
   HRESULT hr = InitializeD3D(hwnd, &pDevice, &pDeviceContext, &pSwapChain,
                              &pRenderTargetView);
   if (FAILED(hr)) {
@@ -62,9 +77,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   }
 
   MSG msg = {};
-  while (GetMessage(&msg, nullptr, 0, 0)) {
-    TranslateMessage(&msg);
-    DispatchMessage(&msg);
+  while (true) {
+    if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+      TranslateMessage(&msg);
+      DispatchMessage(&msg);
+    }
+
     Render(pDeviceContext, pSwapChain, pRenderTargetView); // Render every frame
   }
 
@@ -147,7 +165,8 @@ HRESULT InitializeD3D(HWND hwnd, ID3D11Device **ppDevice,
 void Render(ID3D11DeviceContext *pDeviceContext, IDXGISwapChain *pSwapChain,
             ID3D11RenderTargetView *pRenderTargetView) {
 
-  float clearColor[] = {0.0f, 0.9f, 0.2f, 1.0f}; // Dark blue
+  float clearColor[] = {generateRandomFloat(), generateRandomFloat(),
+                        generateRandomFloat(), 1.0f}; // Dark blue
 
   pDeviceContext->ClearRenderTargetView(pRenderTargetView, clearColor);
 
