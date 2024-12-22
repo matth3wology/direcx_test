@@ -1,4 +1,4 @@
-LIBRARIES = -lUser32 -lGdi32 -lD3D11 -lDXGI -lD3DCompiler
+LIBRARIES = -lUser32 -lGdi32 -lD3D11 -lDXGI -lD3DCompiler -lD2D1
 SRC = src/main.cpp
 TARGET = App.exe
 

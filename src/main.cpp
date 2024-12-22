@@ -1,175 +1,140 @@
+
 #ifndef UNICODE
 #define UNICODE
 #endif
 
-#include <d3d11.h>
-#include <d3dcompiler.h>
-#include <stdlib.h>
-#include <time.h>
+#include <d2d1.h>
 #include <windows.h>
 
-// Function to generate a random float between 0.00 and 1.00
-float generateRandomFloat() {
-  // Seed the random number generator
-  static int seeded = 0;
-  if (!seeded) {
-    srand(time(NULL));
-    seeded = 1;
-  }
+ID2D1Factory *pFactory;
+ID2D1HwndRenderTarget *pRenderTarget;
+ID2D1SolidColorBrush *pBrush;
+D2D1_ELLIPSE ellipse;
 
-  // Generate a random float between 0.00 and 1.00
-  return (float)rand() / (float)RAND_MAX;
+LRESULT CALLBACK windowsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+
+void CalculateLayout() {
+  if (pRenderTarget != NULL) {
+    D2D1_SIZE_F size = pRenderTarget->GetSize();
+    const float x = size.width / 2;
+    const float y = size.height / 2;
+    const float radius = min(x, y);
+    ellipse = D2D1::Ellipse(D2D1::Point2F(x, y), radius, radius);
+  }
 }
 
-LRESULT CALLBACK ProgramHandler(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+HRESULT CreateGraphicsResources(HWND m_hwnd) {
+  HRESULT hr = S_OK;
+  if (pRenderTarget == NULL) {
+    RECT rc;
+    GetClientRect(m_hwnd, &rc);
 
-HRESULT InitializeD3D(HWND hwnd, ID3D11Device **ppDevice,
-                      ID3D11DeviceContext **ppDeviceContext,
-                      IDXGISwapChain **ppSwapChain,
-                      ID3D11RenderTargetView **ppRenderTargetView);
+    D2D1_SIZE_U size = D2D1::SizeU(rc.right, rc.bottom);
 
-void Render(ID3D11DeviceContext *pDeviceContext, IDXGISwapChain *pSwapChain,
-            ID3D11RenderTargetView *pRenderTargetView);
+    hr = pFactory->CreateHwndRenderTarget(
+        D2D1::RenderTargetProperties(),
+        D2D1::HwndRenderTargetProperties(m_hwnd, size), &pRenderTarget);
 
-ID3D11Device *pDevice = nullptr;
-ID3D11DeviceContext *pDeviceContext = nullptr;
-IDXGISwapChain *pSwapChain = nullptr;
-ID3D11RenderTargetView *pRenderTargetView = nullptr;
+    if (SUCCEEDED(hr)) {
+      const D2D1_COLOR_F color = D2D1::ColorF(1.0f, 1.0f, 0);
+      hr = pRenderTarget->CreateSolidColorBrush(color, &pBrush);
+
+      if (SUCCEEDED(hr)) {
+        CalculateLayout();
+      }
+    }
+  }
+  return hr;
+}
+
+void DiscardGraphicsResources() {
+  pRenderTarget->Release();
+  pBrush->Release();
+}
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
-                    PWSTR pCmdLine, int nCmdShow) {
+                    LPWSTR lpCmdLine, int nShowCmd) {
 
-  const wchar_t CLASS_NAME[] = L"Sample Window Class";
+  LPCWSTR s_wzClassName = L"HELLO_WORLD";
 
-  WNDCLASSEXW wc = {};
-  wc.cbSize = sizeof(wc);
-  wc.style = CS_HREDRAW | CS_VREDRAW; // Add redraw styles
-  wc.lpfnWndProc = ProgramHandler;
+  WNDCLASS wc = {};
+  wc.lpfnWndProc = windowsProc;
   wc.hInstance = hInstance;
-  wc.lpszClassName = CLASS_NAME;
+  wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+  wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+  wc.style = CS_SAVEBITS | CS_DROPSHADOW;
+  wc.lpszClassName = s_wzClassName;
+  RegisterClass(&wc);
 
-  RegisterClassExW(&wc);
+  HWND hwnd = CreateWindow(s_wzClassName, L"New Window", WS_OVERLAPPEDWINDOW,
+                           CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+                           CW_USEDEFAULT, NULL, NULL, hInstance, NULL);
 
-  HWND hwnd = CreateWindowExW(0,          // Optional window styles.
-                              CLASS_NAME, // Window class
-                              L"DirectX Basic Window", // Window text
-                              WS_OVERLAPPEDWINDOW,     // Window style
-
-                              // Size and position
-                              CW_USEDEFAULT, CW_USEDEFAULT, 800, 600,
-
-                              nullptr,   // Parent window
-                              nullptr,   // Menu
-                              hInstance, // Instance handle
-                              nullptr    // Additional application data
-  );
-
-  if (hwnd == nullptr) {
-    return 0;
-  }
-
-  ShowWindow(hwnd, nCmdShow);
-
-  HRESULT hr = InitializeD3D(hwnd, &pDevice, &pDeviceContext, &pSwapChain,
-                             &pRenderTargetView);
-  if (FAILED(hr)) {
-    MessageBox(nullptr, L"Failed to initialize D3D", L"Error", MB_OK);
-    return 1;
-  }
+  ShowWindow(hwnd, SW_SHOWMAXIMIZED);
 
   MSG msg = {};
-  while (true) {
-    if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
-      TranslateMessage(&msg);
-      DispatchMessage(&msg);
-    }
-
-    Render(pDeviceContext, pSwapChain, pRenderTargetView); // Render every frame
+  while (GetMessage(&msg, NULL, 0, 0)) {
+    TranslateMessage(&msg);
+    DispatchMessage(&msg);
   }
-
-  // Cleanup
-  if (pRenderTargetView)
-    pRenderTargetView->Release();
-  if (pSwapChain)
-    pSwapChain->Release();
-  if (pDeviceContext)
-    pDeviceContext->Release();
-  if (pDevice)
-    pDevice->Release();
 
   return 0;
 }
 
-LRESULT CALLBACK ProgramHandler(HWND hwnd, UINT msg, WPARAM wParam,
-                                LPARAM lParam) {
+void OnPaint(HWND m_hwnd) {
+  HRESULT hr = CreateGraphicsResources(m_hwnd);
+  if (SUCCEEDED(hr)) {
+    PAINTSTRUCT ps;
+    BeginPaint(m_hwnd, &ps);
+
+    pRenderTarget->BeginDraw();
+
+    pRenderTarget->Clear(D2D1::ColorF(D2D1::ColorF::SkyBlue));
+    pRenderTarget->FillEllipse(ellipse, pBrush);
+
+    hr = pRenderTarget->EndDraw();
+    if (FAILED(hr) || hr == D2DERR_RECREATE_TARGET) {
+      DiscardGraphicsResources();
+    }
+    EndPaint(m_hwnd, &ps);
+  }
+}
+
+void Resize(HWND m_hwnd) {
+  if (pRenderTarget != NULL) {
+    RECT rc;
+    GetClientRect(m_hwnd, &rc);
+
+    D2D1_SIZE_U size = D2D1::SizeU(rc.right, rc.bottom);
+
+    pRenderTarget->Resize(size);
+    CalculateLayout();
+    InvalidateRect(m_hwnd, NULL, FALSE);
+  }
+}
+
+LRESULT CALLBACK windowsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
   switch (msg) {
-  case WM_DESTROY:
-    PostQuitMessage(0);
-    return 0;
-  case WM_SIZE: // Handle window resizing
-    if (wParam != SIZE_MINIMIZED) {
-      // Handle resize logic here if needed (recreate swapchain, etc.)
+  case WM_CREATE:
+    if (FAILED(
+            D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &pFactory))) {
+      return -1; // Fail CreateWindowEx.
     }
     return 0;
+
+  case WM_DESTROY:
+    DiscardGraphicsResources();
+    (*pFactory).Release();
+    PostQuitMessage(0);
+    return 0;
+
+  case WM_PAINT:
+    OnPaint(hwnd);
+    return 0;
+
+  case WM_SIZE:
+    Resize(hwnd);
+    return 0;
   }
-  return DefWindowProc(hwnd, msg, wParam, lParam);
-}
-
-HRESULT InitializeD3D(HWND hwnd, ID3D11Device **ppDevice,
-                      ID3D11DeviceContext **ppDeviceContext,
-                      IDXGISwapChain **ppSwapChain,
-                      ID3D11RenderTargetView **ppRenderTargetView) {
-  HRESULT hr = S_OK;
-
-  DXGI_SWAP_CHAIN_DESC sd = {};
-  sd.BufferCount = 1;
-  sd.BufferDesc.Width = 0;
-  sd.BufferDesc.Height = 0;
-  sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-  sd.BufferDesc.RefreshRate.Numerator = 0;
-  sd.BufferDesc.RefreshRate.Denominator = 1;
-  sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-  sd.OutputWindow = hwnd;
-  sd.SampleDesc.Count = 1;
-  sd.SampleDesc.Quality = 0;
-  sd.Windowed = TRUE;
-
-  D3D_FEATURE_LEVEL featureLevels[] = {
-      D3D_FEATURE_LEVEL_11_0,
-      D3D_FEATURE_LEVEL_10_1,
-      D3D_FEATURE_LEVEL_10_0,
-  };
-  UINT numFeatureLevels = ARRAYSIZE(featureLevels);
-
-  hr = D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr,
-                                     0, featureLevels, numFeatureLevels,
-                                     D3D11_SDK_VERSION, &sd, ppSwapChain,
-                                     ppDevice, nullptr, ppDeviceContext);
-  if (FAILED(hr))
-    return hr;
-
-  ID3D11Texture2D *pBackBuffer = nullptr;
-  hr = (*ppSwapChain)
-           ->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID *)&pBackBuffer);
-  if (FAILED(hr))
-    return hr;
-
-  hr = (*ppDevice)->CreateRenderTargetView(pBackBuffer, nullptr,
-                                           ppRenderTargetView);
-  pBackBuffer->Release();
-  if (FAILED(hr))
-    return hr;
-
-  return S_OK;
-}
-
-void Render(ID3D11DeviceContext *pDeviceContext, IDXGISwapChain *pSwapChain,
-            ID3D11RenderTargetView *pRenderTargetView) {
-
-  float clearColor[] = {generateRandomFloat(), generateRandomFloat(),
-                        generateRandomFloat(), 1.0f};
-
-  pDeviceContext->ClearRenderTargetView(pRenderTargetView, clearColor);
-
-  pSwapChain->Present(1, 0);
+  return DefWindowProc(hwnd, msg, wp, lp);
 }
