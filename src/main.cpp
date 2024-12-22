@@ -8,8 +8,10 @@
 
 ID2D1Factory *pFactory;
 ID2D1HwndRenderTarget *pRenderTarget;
-ID2D1SolidColorBrush *pBrush;
-D2D1_ELLIPSE ellipse;
+ID2D1SolidColorBrush *pBrush1;
+ID2D1SolidColorBrush *pBrush2;
+D2D1_ELLIPSE ellipse1;
+D2D1_ELLIPSE ellipse2;
 
 LRESULT CALLBACK windowsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 
@@ -19,7 +21,8 @@ void CalculateLayout() {
     const float x = size.width / 2;
     const float y = size.height / 2;
     const float radius = min(x, y);
-    ellipse = D2D1::Ellipse(D2D1::Point2F(x, y), radius, radius);
+    ellipse1 = D2D1::Ellipse(D2D1::Point2F(23.0f, 10.23f), radius, radius);
+    ellipse2 = D2D1::Ellipse(D2D1::Point2F(x, y), radius / 2.0f, radius / 2.0f);
   }
 }
 
@@ -36,8 +39,10 @@ HRESULT CreateGraphicsResources(HWND m_hwnd) {
         D2D1::HwndRenderTargetProperties(m_hwnd, size), &pRenderTarget);
 
     if (SUCCEEDED(hr)) {
-      const D2D1_COLOR_F color = D2D1::ColorF(1.0f, 1.0f, 0);
-      hr = pRenderTarget->CreateSolidColorBrush(color, &pBrush);
+      const D2D1_COLOR_F color1 = D2D1::ColorF(1.0f, 1.0f, 0);
+      const D2D1_COLOR_F color2 = D2D1::ColorF(1.0f, 0.2f, 0.2f);
+      hr = pRenderTarget->CreateSolidColorBrush(color1, &pBrush1);
+      hr = pRenderTarget->CreateSolidColorBrush(color2, &pBrush2);
 
       if (SUCCEEDED(hr)) {
         CalculateLayout();
@@ -49,7 +54,8 @@ HRESULT CreateGraphicsResources(HWND m_hwnd) {
 
 void DiscardGraphicsResources() {
   pRenderTarget->Release();
-  pBrush->Release();
+  pBrush1->Release();
+  pBrush2->Release();
 }
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
@@ -90,7 +96,8 @@ void OnPaint(HWND m_hwnd) {
     pRenderTarget->BeginDraw();
 
     pRenderTarget->Clear(D2D1::ColorF(D2D1::ColorF::SkyBlue));
-    pRenderTarget->FillEllipse(ellipse, pBrush);
+    pRenderTarget->FillEllipse(ellipse2, pBrush2);
+    pRenderTarget->FillEllipse(ellipse1, pBrush1);
 
     hr = pRenderTarget->EndDraw();
     if (FAILED(hr) || hr == D2DERR_RECREATE_TARGET) {
