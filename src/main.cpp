@@ -1,7 +1,5 @@
-
 #ifndef UNICODE
 #define UNICODE
-#include <d2d1helper.h>
 #endif
 
 #include <d2d1.h>
