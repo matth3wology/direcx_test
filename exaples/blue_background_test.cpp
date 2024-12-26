@@ -5,9 +5,6 @@
 #include <d3d11.h>
 #include <windows.h>
 
-#pragma comment(lib, "d3d11.lib")
-#pragma comment(lib, "dxgi.lib")
-
 LRESULT CALLBACK ProgramHandler(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 HRESULT InitializeD3D(HWND hwnd, ID3D11Device **ppDevice,
                       ID3D11DeviceContext **ppDeviceContext,
