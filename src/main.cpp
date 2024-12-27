@@ -221,9 +221,11 @@ void InitPipeline() {
   // load and compile the two shaders
   ID3D10Blob *VS, *PS;
 
-  D3DCompileFromFile(L"test.shader", 0, 0, "VShader", "vs_4_0", 0, 0, &VS, 0);
+  D3DCompileFromFile(L"shaders/test.shader", 0, 0, "VShader", "vs_4_0", 0, 0,
+                     &VS, 0);
 
-  D3DCompileFromFile(L"test.shader", 0, 0, "PShader", "ps_4_0", 0, 0, &PS, 0);
+  D3DCompileFromFile(L"shaders/test.shader", 0, 0, "PShader", "ps_4_0", 0, 0,
+                     &PS, 0);
 
   // encapsulate both shaders into shader objects
   dev->CreateVertexShader(VS->GetBufferPointer(), VS->GetBufferSize(), NULL,
