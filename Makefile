@@ -3,12 +3,8 @@ SRC = src/main.cpp
 TARGET = App.exe
 
 
-all: hlsl
+all:
 	clang $(SRC) -Isrc  $(LIBRARIES) -o $(TARGET)
 
-hlsl:
-	fxc /E main /T vs_5_0 /Gfa /Zi .\shaders\CubeVertexShader.hlsl /Fo CubeVertexShader.cso
-	fxc /E main /T ps_5_0 /Gfa /Zi .\shaders\CubePixelShader.hlsl /Fo CubePixelShader.cso
-
 clean:
-	del *.exe *.cso
+	del *.exe
