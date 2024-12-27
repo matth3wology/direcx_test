@@ -1,356 +1,251 @@
+#define UNICODE
 
-#include "Cube11.hpp"
-#include <fstream>
-#include <vector>
-#include <winerror.h>
-#include <winuser.h>
+// include the basic windows header files and the Direct3D header files
+#include <d3d11.h>
+#include <d3dcompiler.h>
+#include <windows.h>
+#include <windowsx.h>
 
-template <typename T> using ComPtr = Microsoft::WRL::ComPtr<T>;
+// define the screen resolution
+#define SCREEN_WIDTH 800
+#define SCREEN_HEIGHT 600
 
-Cube11::Cube11() : m_frameCount(0) { CreateDeviceResources(); }
+// global declarations
+IDXGISwapChain *swapchain;   // the pointer to the swap chain interface
+ID3D11Device *dev;           // the pointer to our Direct3D device interface
+ID3D11DeviceContext *devcon; // the pointer to our Direct3D device context
+ID3D11RenderTargetView *backbuffer; // the pointer to our back buffer
+ID3D11InputLayout *pLayout;         // the pointer to the input layout
+ID3D11VertexShader *pVS;            // the pointer to the vertex shader
+ID3D11PixelShader *pPS;             // the pointer to the pixel shader
+ID3D11Buffer *pVBuffer;             // the pointer to the vertex buffer
 
-Cube11::~Cube11() {}
+// a struct to define a single vertex
+struct VERTEX {
+  FLOAT X, Y, Z;
+  float Color[4];
+};
 
-//-----------------------------------------------------------------------------
-// Create device-dependent resources.
-//-----------------------------------------------------------------------------
-void Cube11::CreateDeviceResources() {
-  CreateDevice();
-  CreateShaders();
-  CreateCube();
-  CreateViewMatrix();
-}
+// function prototypes
+void InitD3D(HWND hWnd); // sets up and initializes Direct3D
+void RenderFrame(void);  // renders a single frame
+void CleanD3D(void);     // closes Direct3D and releases memory
+void InitGraphics(void); // creates the shape to render
+void InitPipeline(void); // loads and prepares the shaders
 
-//-----------------------------------------------------------------------------
-// Create the Direct3D 11 device and device context.
-//-----------------------------------------------------------------------------
-void Cube11::CreateDevice() {
-  UINT creationFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+// the WindowProc function prototype
+LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam,
+                            LPARAM lParam);
 
-#if defined(_DEBUG)
-  creationFlags |= D3D11_CREATE_DEVICE_DEBUG;
-#endif
+// the entry point for any Windows program
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
+                   LPSTR lpCmdLine, int nCmdShow) {
+  HWND hWnd;
+  WNDCLASSEX wc;
 
-  D3D_FEATURE_LEVEL featureLevels[] = {D3D_FEATURE_LEVEL_9_1};
+  ZeroMemory(&wc, sizeof(WNDCLASSEX));
 
-  // Create the Direct3D 11 API device object and a corresponding context.
-  ComPtr<ID3D11Device> device;
-  ComPtr<ID3D11DeviceContext> context;
-  D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, creationFlags,
-                    featureLevels, ARRAYSIZE(featureLevels), D3D11_SDK_VERSION,
-                    &device, nullptr, &context);
-
-  device.As(&m_d3dDevice);
-  context.As(&m_d3dContext);
-}
-
-//-----------------------------------------------------------------------------
-// Load compiled shader objects.
-//-----------------------------------------------------------------------------
-void Cube11::CreateShaders() {
-  const std::istreambuf_iterator<char> EOS;
-
-  HRESULT hr;
-
-  // Load vertex shader.
-  std::ifstream vertexShaderFile;
-  vertexShaderFile.open("CubeVertexShader.cso", std::ios::binary);
-  std::vector<char> vertexShaderData(
-      std::istreambuf_iterator<char>(vertexShaderFile), EOS);
-  vertexShaderFile.close();
-  m_d3dDevice->CreateVertexShader(vertexShaderData.data(),
-                                  vertexShaderData.size(), nullptr,
-                                  &m_vertexShader);
-
-  // Create input layout.
-  const D3D11_INPUT_ELEMENT_DESC vertexDesc[] = {
-      {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
-       D3D11_INPUT_PER_VERTEX_DATA, 0},
-      {"COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12,
-       D3D11_INPUT_PER_VERTEX_DATA, 0},
-  };
-  m_d3dDevice->CreateInputLayout(vertexDesc, ARRAYSIZE(vertexDesc),
-                                 vertexShaderData.data(),
-                                 vertexShaderData.size(), &m_inputLayout);
-
-  // Create constant buffer.
-  CD3D11_BUFFER_DESC constantBufferDesc(
-      sizeof(ModelViewProjectionConstantBuffer), D3D11_BIND_CONSTANT_BUFFER);
-  m_d3dDevice->CreateBuffer(&constantBufferDesc, nullptr, &m_constantBuffer);
-
-  // Load pixel shader.
-  std::ifstream pixelShaderFile;
-  pixelShaderFile.open("CubePixelShader.cso", std::ios::binary);
-  std::vector<char> pixelShaderData(
-      std::istreambuf_iterator<char>(pixelShaderFile), EOS);
-  pixelShaderFile.close();
-  hr = m_d3dDevice->CreatePixelShader(
-      pixelShaderData.data(), pixelShaderData.size(), nullptr, &m_pixelShader);
-  if (FAILED(hr)) {
-    MessageBox(nullptr, L"Unable to create Pixel Shader", L"ERROR", MB_OK);
-  }
-}
-
-//-----------------------------------------------------------------------------
-// Creates the vertex buffer and index buffer.
-//-----------------------------------------------------------------------------
-void Cube11::CreateCube() {
-  // Create vertex buffer to store cube geometry.
-  VertexPositionColor CubeVertices[] = {
-      {DirectX::XMFLOAT3(-0.5f, -0.5f, -0.5f),
-       DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f)},
-      {DirectX::XMFLOAT3(-0.5f, -0.5f, 0.5f),
-       DirectX::XMFLOAT3(0.0f, 0.0f, 1.0f)},
-      {DirectX::XMFLOAT3(-0.5f, 0.5f, -0.5f),
-       DirectX::XMFLOAT3(0.0f, 1.0f, 0.0f)},
-      {DirectX::XMFLOAT3(-0.5f, 0.5f, 0.5f),
-       DirectX::XMFLOAT3(0.0f, 1.0f, 1.0f)},
-
-      {DirectX::XMFLOAT3(0.5f, -0.5f, -0.5f),
-       DirectX::XMFLOAT3(1.0f, 0.0f, 0.0f)},
-      {DirectX::XMFLOAT3(0.5f, -0.5f, 0.5f),
-       DirectX::XMFLOAT3(1.0f, 0.0f, 1.0f)},
-      {DirectX::XMFLOAT3(0.5f, 0.5f, -0.5f),
-       DirectX::XMFLOAT3(1.0f, 1.0f, 0.0f)},
-      {DirectX::XMFLOAT3(0.5f, 0.5f, 0.5f),
-       DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f)},
-  };
-  D3D11_SUBRESOURCE_DATA vertexBufferData = {};
-  vertexBufferData.pSysMem = CubeVertices;
-  vertexBufferData.SysMemPitch = 0;
-  vertexBufferData.SysMemSlicePitch = 0;
-  CD3D11_BUFFER_DESC vertexBufferDesc(sizeof(CubeVertices),
-                                      D3D11_BIND_VERTEX_BUFFER);
-  m_d3dDevice->CreateBuffer(&vertexBufferDesc, &vertexBufferData,
-                            &m_vertexBuffer);
-
-  // Create index buffer.
-  unsigned short cubeIndices[] = {
-      // -x face
-      0,
-      2,
-      1,
-      1,
-      2,
-      3,
-      // +x face
-      4,
-      5,
-      6,
-      5,
-      7,
-      6,
-      // -y face
-      0,
-      1,
-      5,
-      0,
-      5,
-      4,
-      // +y face
-      2,
-      6,
-      7,
-      2,
-      7,
-      3,
-      // -z face
-      0,
-      4,
-      6,
-      0,
-      6,
-      2,
-      // +z face
-      1,
-      3,
-      7,
-      1,
-      7,
-      5,
-  };
-  m_indexCount = ARRAYSIZE(cubeIndices);
-  D3D11_SUBRESOURCE_DATA indexBufferData = {};
-  indexBufferData.pSysMem = cubeIndices;
-  indexBufferData.SysMemPitch = 0;
-  indexBufferData.SysMemSlicePitch = 0;
-  CD3D11_BUFFER_DESC indexBufferDesc(sizeof(cubeIndices),
-                                     D3D11_BIND_INDEX_BUFFER);
-  m_d3dDevice->CreateBuffer(&indexBufferDesc, &indexBufferData, &m_indexBuffer);
-}
-
-//-----------------------------------------------------------------------------
-// Create the view matrix.
-//-----------------------------------------------------------------------------
-void Cube11::CreateViewMatrix() {
-  // Create the constant buffer data in system memory.
-  DirectX::XMVECTOR eye = DirectX::XMVectorSet(0.0f, 0.7f, 1.5f, 0.0f);
-  DirectX::XMVECTOR at = DirectX::XMVectorSet(0.0f, -0.1f, 0.0f, 0.0f);
-  DirectX::XMVECTOR up = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-
-  DirectX::XMStoreFloat4x4(
-      &m_constantBufferData.view,
-      DirectX::XMMatrixTranspose(DirectX::XMMatrixLookAtRH(eye, at, up)));
-}
-
-//-----------------------------------------------------------------------------
-// Create the swap chain, back buffer and viewport.
-//-----------------------------------------------------------------------------
-void Cube11::CreateWindowSizeDependentResources(HWND window) {
-  if (m_swapChain != nullptr) {
-    // If the swap chain already exists, resize it.
-    m_renderTargetView = nullptr;
-    m_swapChain->ResizeBuffers(2, 0, 0, DXGI_FORMAT_B8G8R8A8_UNORM, 0);
-  } else {
-    // Otherwise, create a new one.
-    DXGI_SWAP_CHAIN_DESC swapChainDesc = {};
-
-    swapChainDesc.Windowed = TRUE;
-    swapChainDesc.BufferDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-    swapChainDesc.SampleDesc.Count = 1;
-    swapChainDesc.SampleDesc.Quality = 0;
-    swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
-    swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    swapChainDesc.BufferCount = 2;
-    swapChainDesc.OutputWindow = window;
-
-    ComPtr<IDXGIDevice> dxgiDevice;
-    m_d3dDevice.As(&dxgiDevice);
-
-    ComPtr<IDXGIAdapter> dxgiAdapter;
-    dxgiDevice->GetAdapter(&dxgiAdapter);
-
-    ComPtr<IDXGIFactory> dxgiFactory;
-    dxgiAdapter->GetParent(IID_PPV_ARGS(&dxgiFactory));
-
-    ComPtr<IDXGISwapChain> swapChain;
-    dxgiFactory->CreateSwapChain(m_d3dDevice.Get(), &swapChainDesc, &swapChain);
-    swapChain.As(&m_swapChain);
-  }
-
-  // Get the back buffer resource.
-  ComPtr<ID3D11Texture2D> backBuffer;
-  m_swapChain->GetBuffer(0, IID_PPV_ARGS(&backBuffer));
-
-  // Create a render target view on the back buffer.
-  m_d3dDevice->CreateRenderTargetView(backBuffer.Get(), nullptr,
-                                      &m_renderTargetView);
-
-  // Set the rendering viewport to target the entire window.
-  D3D11_TEXTURE2D_DESC backBufferDesc = {};
-  backBuffer->GetDesc(&backBufferDesc);
-  CD3D11_VIEWPORT viewport(0.0f, 0.0f, static_cast<float>(backBufferDesc.Width),
-                           static_cast<float>(backBufferDesc.Height));
-  m_d3dContext->RSSetViewports(1, &viewport);
-
-  // The perspective matrix depends on the viewport aspect ratio.
-  CreatePerspectiveMatrix(static_cast<float>(backBufferDesc.Width),
-                          static_cast<float>(backBufferDesc.Height));
-}
-
-//-----------------------------------------------------------------------------
-// Create the perspective matrix.
-//-----------------------------------------------------------------------------
-void Cube11::CreatePerspectiveMatrix(float width, float height) {
-  float aspectRatio = width / height;
-  float fovAngleY = 70.0f * DirectX::XM_PI / 180.0f;
-
-  DirectX::XMStoreFloat4x4(
-      &m_constantBufferData.projection,
-      DirectX::XMMatrixTranspose(DirectX::XMMatrixPerspectiveFovRH(
-          fovAngleY, aspectRatio, 0.01f, 100.0f)));
-}
-
-//-----------------------------------------------------------------------------
-// Render the cube.
-//-----------------------------------------------------------------------------
-void Cube11::RenderFrame() {
-  // Clear the back buffer.
-  const float midnightBlue[] = {0.098f, 0.098f, 0.439f, 1.000f};
-  m_d3dContext->ClearRenderTargetView(m_renderTargetView.Get(), midnightBlue);
-
-  // Set the render target. This starts the drawing operation.
-  m_d3dContext->OMSetRenderTargets(1, m_renderTargetView.GetAddressOf(),
-                                   nullptr);
-
-  // Rotate the cube 1 degree per frame.
-  XMStoreFloat4x4(&m_constantBufferData.model,
-                  DirectX::XMMatrixTranspose(DirectX::XMMatrixRotationY(
-                      m_frameCount++ * DirectX::XM_PI / 180.f)));
-
-  // Copy the updated constant buffer from system memory to video memory.
-  m_d3dContext->UpdateSubresource(m_constantBuffer.Get(), 0, nullptr,
-                                  &m_constantBufferData, 0, 0);
-
-  // Send vertex data to the Input Assembler stage.
-  UINT stride = sizeof(VertexPositionColor);
-  UINT offset = 0;
-  m_d3dContext->IASetVertexBuffers(0, 1, m_vertexBuffer.GetAddressOf(), &stride,
-                                   &offset);
-  m_d3dContext->IASetIndexBuffer(m_indexBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
-  m_d3dContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-  m_d3dContext->IASetInputLayout(m_inputLayout.Get());
-
-  // Set the vertex shader.
-  m_d3dContext->VSSetShader(m_vertexShader.Get(), nullptr, 0);
-
-  // Set the vertex shader constant buffer data.
-  m_d3dContext->VSSetConstantBuffers(0, 1, m_constantBuffer.GetAddressOf());
-
-  // Set the pixel shader.
-  m_d3dContext->PSSetShader(m_pixelShader.Get(), nullptr, 0);
-
-  // Draw the cube.
-  m_d3dContext->DrawIndexed(m_indexCount, 0, 0);
-
-  // Present the frame by swapping the back buffer to the screen.
-  m_swapChain->Present(1, 0);
-}
-
-Cube11 cube;
-
-LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
-                         LPARAM lParam) {
-  switch (message) {
-  case WM_SIZE:
-    cube.CreateWindowSizeDependentResources(hWnd);
-    break;
-  case WM_DESTROY:
-    PostQuitMessage(0);
-    break;
-  default:
-    return DefWindowProc(hWnd, message, wParam, lParam);
-  }
-  return 0;
-}
-
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
-                    PWSTR pCmdLine, int nCmdShow) {
-  const wchar_t CLASSNAME[] = L"Cube11";
-
-  WNDCLASS wc = {};
-  wc.lpszClassName = CLASSNAME;
-  wc.lpfnWndProc = WndProc;
+  wc.cbSize = sizeof(WNDCLASSEX);
+  wc.style = CS_HREDRAW | CS_VREDRAW;
+  wc.lpfnWndProc = WindowProc;
   wc.hInstance = hInstance;
-  wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-  RegisterClass(&wc);
+  wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+  wc.lpszClassName = L"WindowClass";
 
-  HWND hWnd = CreateWindow(CLASSNAME, L"Cube11", WS_OVERLAPPEDWINDOW,
-                           CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-                           CW_USEDEFAULT, NULL, NULL, hInstance, NULL);
+  RegisterClassEx(&wc);
+
+  RECT wr = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
+  AdjustWindowRect(&wr, WS_OVERLAPPEDWINDOW, FALSE);
+
+  hWnd = CreateWindowEx(NULL, L"WindowClass", L"Our First Direct3D Program",
+                        WS_OVERLAPPEDWINDOW, 300, 300, wr.right - wr.left,
+                        wr.bottom - wr.top, NULL, NULL, hInstance, NULL);
 
   ShowWindow(hWnd, nCmdShow);
 
-  MSG msg = {};
-  msg.message = WM_NULL;
-  while (WM_QUIT != msg.message) {
-    if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+  // set up and initialize Direct3D
+  InitD3D(hWnd);
+
+  // enter the main loop:
+
+  MSG msg;
+
+  while (TRUE) {
+    if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
       TranslateMessage(&msg);
       DispatchMessage(&msg);
-    } else {
-      cube.RenderFrame();
+
+      if (msg.message == WM_QUIT)
+        break;
     }
+
+    RenderFrame();
   }
 
-  return 0;
+  // clean up DirectX and COM
+  CleanD3D();
+
+  return msg.wParam;
+}
+
+// this is the main message handler for the program
+LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam,
+                            LPARAM lParam) {
+  switch (message) {
+  case WM_DESTROY: {
+    PostQuitMessage(0);
+    return 0;
+  } break;
+  }
+
+  return DefWindowProc(hWnd, message, wParam, lParam);
+}
+
+// this function initializes and prepares Direct3D for use
+void InitD3D(HWND hWnd) {
+  // create a struct to hold information about the swap chain
+  DXGI_SWAP_CHAIN_DESC scd;
+
+  // clear out the struct for use
+  ZeroMemory(&scd, sizeof(DXGI_SWAP_CHAIN_DESC));
+
+  // fill the swap chain description struct
+  scd.BufferCount = 1;                                // one back buffer
+  scd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; // use 32-bit color
+  scd.BufferDesc.Width = SCREEN_WIDTH;   // set the back buffer width
+  scd.BufferDesc.Height = SCREEN_HEIGHT; // set the back buffer height
+  scd.BufferUsage =
+      DXGI_USAGE_RENDER_TARGET_OUTPUT; // how swap chain is to be used
+  scd.OutputWindow = hWnd;             // the window to be used
+  scd.SampleDesc.Count = 4;            // how many multisamples
+  scd.Windowed = TRUE;                 // windowed/full-screen mode
+  scd.Flags =
+      DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH; // allow full-screen switching
+
+  // create a device, device context and swap chain using the information in the
+  // scd struct
+  D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, NULL,
+                                NULL, NULL, D3D11_SDK_VERSION, &scd, &swapchain,
+                                &dev, NULL, &devcon);
+
+  // get the address of the back buffer
+  ID3D11Texture2D *pBackBuffer;
+  swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID *)&pBackBuffer);
+
+  // use the back buffer address to create the render target
+  dev->CreateRenderTargetView(pBackBuffer, NULL, &backbuffer);
+  pBackBuffer->Release();
+
+  // set the render target as the back buffer
+  devcon->OMSetRenderTargets(1, &backbuffer, NULL);
+
+  // Set the viewport
+  D3D11_VIEWPORT viewport;
+  ZeroMemory(&viewport, sizeof(D3D11_VIEWPORT));
+
+  viewport.TopLeftX = 0;
+  viewport.TopLeftY = 0;
+  viewport.Width = SCREEN_WIDTH;
+  viewport.Height = SCREEN_HEIGHT;
+
+  devcon->RSSetViewports(1, &viewport);
+
+  InitPipeline();
+  InitGraphics();
+}
+
+// this is the function used to render a single frame
+void RenderFrame(void) {
+  // clear the back buffer to a deep blue
+  const float bg_color[4] = {0.0f, 0.2f, 0.4f, 1.0f};
+  devcon->ClearRenderTargetView(backbuffer, bg_color);
+
+  // select which vertex buffer to display
+  UINT stride = sizeof(VERTEX);
+  UINT offset = 0;
+  devcon->IASetVertexBuffers(0, 1, &pVBuffer, &stride, &offset);
+
+  // select which primtive type we are using
+  devcon->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+  // draw the vertex buffer to the back buffer
+  devcon->Draw(3, 0);
+
+  // switch the back buffer and the front buffer
+  swapchain->Present(0, 0);
+}
+
+// this is the function that cleans up Direct3D and COM
+void CleanD3D(void) {
+  swapchain->SetFullscreenState(FALSE, NULL); // switch to windowed mode
+
+  // close and release all existing COM objects
+  pLayout->Release();
+  pVS->Release();
+  pPS->Release();
+  pVBuffer->Release();
+  swapchain->Release();
+  backbuffer->Release();
+  dev->Release();
+  devcon->Release();
+}
+
+// this is the function that creates the shape to render
+void InitGraphics() {
+  // create a triangle using the VERTEX struct
+  VERTEX OurVertices[] = {{0.0f, 0.5f, 0.0f, {1.0f, 0.0f, 0.0f, 1.0f}},
+                          {0.45f, -0.5, 0.0f, {0.0f, 1.0f, 0.0f, 1.0f}},
+                          {-0.45f, -0.5f, 0.0f, {0.0f, 0.0f, 1.0f, 1.0f}}};
+
+  // create the vertex buffer
+  D3D11_BUFFER_DESC bd;
+  ZeroMemory(&bd, sizeof(bd));
+
+  bd.Usage = D3D11_USAGE_DYNAMIC;          // write access access by CPU and GPU
+  bd.ByteWidth = sizeof(VERTEX) * 3;       // size is the VERTEX struct * 3
+  bd.BindFlags = D3D11_BIND_VERTEX_BUFFER; // use as a vertex buffer
+  bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE; // allow CPU to write in buffer
+
+  dev->CreateBuffer(&bd, NULL, &pVBuffer); // create the buffer
+
+  // copy the vertices into the buffer
+  D3D11_MAPPED_SUBRESOURCE ms;
+  devcon->Map(pVBuffer, NULL, D3D11_MAP_WRITE_DISCARD, NULL,
+              &ms);                                   // map the buffer
+  memcpy(ms.pData, OurVertices, sizeof(OurVertices)); // copy the data
+  devcon->Unmap(pVBuffer, NULL);                      // unmap the buffer
+}
+
+// this function loads and prepares the shaders
+void InitPipeline() {
+  // load and compile the two shaders
+  ID3D10Blob *VS, *PS;
+
+  D3DCompileFromFile(L"shaders.shader", 0, 0, "VShader", "vs_4_0", 0, 0, &VS,
+                     0);
+
+  D3DCompileFromFile(L"shaders.shader", 0, 0, "PShader", "ps_4_0", 0, 0, &PS,
+                     0);
+
+  // encapsulate both shaders into shader objects
+  dev->CreateVertexShader(VS->GetBufferPointer(), VS->GetBufferSize(), NULL,
+                          &pVS);
+  dev->CreatePixelShader(PS->GetBufferPointer(), PS->GetBufferSize(), NULL,
+                         &pPS);
+
+  // set the shader objects
+  devcon->VSSetShader(pVS, 0, 0);
+  devcon->PSSetShader(pPS, 0, 0);
+
+  // create the input layout object
+  D3D11_INPUT_ELEMENT_DESC ied[] = {
+      {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
+       D3D11_INPUT_PER_VERTEX_DATA, 0},
+      {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12,
+       D3D11_INPUT_PER_VERTEX_DATA, 0},
+  };
+
+  dev->CreateInputLayout(ied, 2, VS->GetBufferPointer(), VS->GetBufferSize(),
+                         &pLayout);
+  devcon->IASetInputLayout(pLayout);
 }
