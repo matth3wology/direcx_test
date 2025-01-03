@@ -1,11 +1,8 @@
-LIBRARIES = -lUser32 -lGdi32 -lD3D11 -lDXGI -lD3DCompiler -lD2D1 -lShell32
-SRC = src/main.cpp src/Setup3D.cpp
-INCLUDE=src
+CC=clang++
+SRC = src/Character.cpp src/Setup3D.cpp src/main.cpp
+INCLUDE = ./
 TARGET = App.exe
-
+LIBS = -lUser32 -lGdi32 -lD3D11 -lDXGI -lD3DCompiler -lD2D1 -lShell32
 
 all:
-	clang $(SRC) -I$(INCLUDE) $(LIBRARIES) -o $(TARGET)
-
-clean:
-	del *.exe
+	$(CC) $(SRC) -I$(INCLUDE) -o $(TARGET) $(LIBS)

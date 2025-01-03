@@ -1,7 +1,9 @@
+#pragma once
 #define UNICODE
 
-// include the basic windows header files and the Direct3D header files
 #include <DirectXMath.h>
+#include <cmath>
+#include <d2d1.h>
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #include <profileapi.h>
