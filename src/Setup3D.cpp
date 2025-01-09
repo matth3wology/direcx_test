@@ -1,5 +1,6 @@
 #include "Setup3D.hpp"
 #include "Character.hpp"
+#include "headers.hpp"
 
 // this function initializes and prepares Direct3D for use
 void Setup3D::InitD3D() {
@@ -17,7 +18,7 @@ void Setup3D::InitD3D() {
   scd.BufferUsage =
       DXGI_USAGE_RENDER_TARGET_OUTPUT; // how swap chain is to be used
   scd.OutputWindow = m_hwnd;           // the window to be used
-  scd.SampleDesc.Count = 4;            // how many multisamples
+  scd.SampleDesc.Count = 1;            // how many multisamples
   scd.Windowed = TRUE;                 // windowed/full-screen mode
   scd.Flags =
       DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH; // allow full-screen switching
@@ -45,8 +46,47 @@ void Setup3D::InitD3D() {
 
   pBackBuffer->Release();
 
+  // Create depth stensil state
+  D3D11_DEPTH_STENCIL_DESC deDesc = {};
+  deDesc.DepthEnable = TRUE; // Enable depth testing
+  deDesc.DepthWriteMask =
+      D3D11_DEPTH_WRITE_MASK_ALL;           // Allow writing to the depth buffer
+  deDesc.DepthFunc = D3D11_COMPARISON_LESS; // Pass if the depth is less
+
+  if (FAILED(dev->CreateDepthStencilState(&deDesc, &pDSState))) {
+    MessageBox(nullptr, L"Unable to create Depth Stencil State", L"ERROR",
+               MB_OK);
+  }
+
+  // Bind depth state
+  devcon->OMSetDepthStencilState(pDSState.Get(), 1u);
+
+  D3D11_TEXTURE2D_DESC descDepth = {};
+  descDepth.Width = 800;
+  descDepth.Height = 600;
+  descDepth.MipLevels = 1u;
+  descDepth.ArraySize = 1u;
+  descDepth.Format = DXGI_FORMAT_D32_FLOAT;
+  descDepth.SampleDesc.Count = 1;
+  descDepth.SampleDesc.Quality = 0;
+  descDepth.Usage = D3D11_USAGE_DEFAULT;
+  descDepth.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+  if (FAILED(dev->CreateTexture2D(&descDepth, nullptr, &pDepthStencil))) {
+    MessageBox(nullptr, L"Unable to create Texture 2D.", L"ERROR", MB_OK);
+  }
+
+  D3D11_DEPTH_STENCIL_VIEW_DESC descDSV = {};
+  descDSV.Format = descDepth.Format;
+  descDSV.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+  descDSV.Texture2D.MipSlice = 0u;
+  if (FAILED(
+          dev->CreateDepthStencilView(pDepthStencil.Get(), &descDSV, &pDSV))) {
+    MessageBox(nullptr, L"Unable to create Depth Stencil View.", L"ERROR",
+               MB_OK);
+  }
+
   // set the render target as the back buffer
-  devcon->OMSetRenderTargets(1, &backbuffer, NULL);
+  devcon->OMSetRenderTargets(1u, backbuffer.GetAddressOf(), pDSV.Get());
 
   // Set the viewport
   D3D11_VIEWPORT viewport;
@@ -56,6 +96,8 @@ void Setup3D::InitD3D() {
   viewport.TopLeftY = 0;
   viewport.Width = SCREEN_WIDTH;
   viewport.Height = SCREEN_HEIGHT;
+  viewport.MaxDepth = 1.0f;
+  viewport.MinDepth = 0.0f;
 
   devcon->RSSetViewports(1, &viewport);
 }
@@ -64,14 +106,19 @@ void Setup3D::InitD3D() {
 void Setup3D::RenderFrame(void) {
 
   Character player1;
+  Character player2;
 
   player1.Init(m_hwnd, dev, devcon);
+  player2.Init(m_hwnd, dev, devcon);
 
   // clear the back buffer to a deep blue
   const float bg_color[4] = {0.0f, 0.2f, 0.4f, 1.0f};
-  devcon->ClearRenderTargetView(backbuffer, bg_color);
+  devcon->ClearRenderTargetView(backbuffer.Get(), bg_color);
+  devcon->ClearDepthStencilView(
+      pDSV.Get(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
-  player1.Draw(m_hwnd, dev, devcon);
+  player1.Draw(m_hwnd, dev, devcon, 0.2f, 0.3f, 5.0f, 0.83f);
+  player2.Draw(m_hwnd, dev, devcon, 1.3f, 1.0f, 4.0f, 3.14f);
 
   // switch the back buffer and the front buffer
   if (FAILED(swapchain->Present(0, 0))) {
@@ -79,6 +126,7 @@ void Setup3D::RenderFrame(void) {
   }
 
   player1.CleanUp();
+  player2.CleanUp();
 }
 
 // this is the function that cleans up Direct3D and COM

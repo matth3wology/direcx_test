@@ -4,8 +4,12 @@ class Setup3D : public BaseWindow<Setup3D> {
   IDXGISwapChain *swapchain;   // the pointer to the swap chain interface
   ID3D11Device *dev;           // the pointer to our Direct3D device interface
   ID3D11DeviceContext *devcon; // the pointer to our Direct3D device context
-  ID3D11RenderTargetView *backbuffer; // the pointer to our back buffer
   ID3D11Buffer *indexBuffer;
+  Microsoft::WRL::ComPtr<ID3D11RenderTargetView>
+      backbuffer; // the pointer to our back buffer
+  Microsoft::WRL::ComPtr<ID3D11DepthStencilState> pDSState;
+  Microsoft::WRL::ComPtr<ID3D11Texture2D> pDepthStencil;
+  Microsoft::WRL::ComPtr<ID3D11DepthStencilView> pDSV;
 
 public:
   void InitD3D();         // sets up and initializes Direct3D

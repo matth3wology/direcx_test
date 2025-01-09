@@ -43,25 +43,9 @@ void Character::Init(HWND m_hwnd, ID3D11Device *dev,
   }
   devcon->IASetInputLayout(pLayout);
 }
-
-struct ConstantBuffer {
-
-  struct {
-    DirectX::XMMATRIX element;
-  } transform;
-};
-
-struct ConstantBuffer2 {
-  struct {
-    float r;
-    float g;
-    float b;
-    float a;
-  } face_colors[6];
-};
-
 void Character::Draw(HWND m_hwnd, ID3D11Device *dev,
-                     ID3D11DeviceContext *devcon) {
+                     ID3D11DeviceContext *devcon, float x, float y, float z,
+                     float angle) {
 
   // create a CUBE using the VERTEX
   struct VERTEX OurVertices[] = {{-1.0f, -1.0f, -1.0f}, {1.0f, -1.0f, -1.0f},
@@ -72,11 +56,9 @@ void Character::Draw(HWND m_hwnd, ID3D11Device *dev,
   WORD indices[] = {0, 2, 1, 2, 3, 1, 1, 3, 5, 3, 7, 5, 2, 6, 3, 3, 6, 7,
                     4, 5, 7, 4, 7, 6, 0, 4, 2, 2, 4, 6, 0, 1, 4, 1, 5, 4};
 
-  float angle = 0.83f;
-
   const ConstantBuffer cb = {{DirectX::XMMatrixTranspose(
       DirectX::XMMatrixRotationZ(angle) * DirectX::XMMatrixRotationX(angle) *
-      DirectX::XMMatrixTranslation(0.0f, 0.0f, 4.0f) *
+      DirectX::XMMatrixTranslation(x, y, z) *
       DirectX::XMMatrixPerspectiveLH(1.0f, 3.0f / 4.0f, 0.5f, 10.0f))}};
 
   const ConstantBuffer2 cb2 = {{
@@ -158,13 +140,9 @@ void Character::Draw(HWND m_hwnd, ID3D11Device *dev,
   devcon->IASetVertexBuffers(0, 1, &pVBuffer, &stride, &offset);
   devcon->IASetIndexBuffer(indexBuffer, DXGI_FORMAT_R16_UINT, 0);
 
-  // select which primtive type we are using
-  devcon->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
   // draw the vertex buffer to the back buffer
   devcon->DrawIndexed(std::size(indices), 0, 0);
 }
-
 void Character::CleanUp() {
   pVBuffer->Release();
   pVS->Release();

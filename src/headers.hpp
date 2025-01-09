@@ -10,6 +10,7 @@
 #include <windows.h>
 #include <windowsx.h>
 #include <winnt.h>
+#include <wrl.h>
 
 // define the screen resolution
 #define SCREEN_WIDTH 800
